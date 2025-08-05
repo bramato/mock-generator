@@ -49,7 +49,13 @@ class InitWizard {
       
       console.log('\\n✅ Configuration completed successfully!');
       console.log('\\n🚀 You can now use the AI mock generator:');
-      console.log('   ai-generate-mock <input.json> --count 50\\n');
+      console.log('   ai-generate-mock <input.json> --count 50');
+      
+      const hasImageConfig = config.HUGGINGFACE_API_KEY || config.STORAGE_PROVIDER;
+      if (hasImageConfig) {
+        console.log('   ai-generate-mock <input.json> --images --count 20   # With AI image processing');
+      }
+      console.log('');
       
     } catch (error) {
       console.error('\\n❌ Configuration failed:', error instanceof Error ? error.message : 'Unknown error');
@@ -66,18 +72,14 @@ class InitWizard {
     // Step 2: Model Selection
     const models = await this.selectModels();
     
-    // Step 3: Hugging Face API Key (optional)
-    const hfApiKey = await this.getHuggingFaceApiKey();
-    
-    // Step 4: Storage Configuration (optional)
-    const storageConfig = await this.configureStorage();
+    // Step 3: Image Processing Configuration (optional)
+    const imageConfig = await this.configureImageProcessing();
     
     return {
       OPENROUTER_API_KEY: apiKey,
       OPENROUTER_DEFAULT_MODEL: models.default,
       OPENROUTER_MOCK_GENERATOR_MODEL: models.mockGenerator,
-      HUGGINGFACE_API_KEY: hfApiKey,
-      ...storageConfig
+      ...imageConfig
     };
   }
 
@@ -176,15 +178,16 @@ class InitWizard {
   }
 
   private async getHuggingFaceApiKey(): Promise<string | undefined> {
-    console.log('\\nStep 3: Hugging Face API Key (Optional)');
-    console.log('For image generation using Hugging Face models. Leave blank to skip.\\n');
+    console.log('\\n🤖 Hugging Face API Configuration');
+    console.log('Hugging Face provides the AI models for image generation (FLUX.1-dev, Qwen-Image).\\n');
     console.log('📌 Create a token at: \\x1b[36mhttps://huggingface.co/settings/tokens\\x1b[0m');
-    console.log('   (Needs "Inference Providers" permission)\\n');
+    console.log('   • Select "Read" access level');
+    console.log('   • Enable "Make calls to the serverless Inference API"\\n');
 
-    const useHF = await this.askQuestion('Do you want to configure Hugging Face for image generation? (y/n) ');
+    const useHF = await this.askQuestion('Do you want to configure Hugging Face API key? (y/n) ');
     
     if (useHF.toLowerCase() !== 'y' && useHF.toLowerCase() !== 'yes') {
-      console.log('Skipping Hugging Face configuration. You can still generate images with rate limits.');
+      console.log('   Skipping Hugging Face API key. Image generation will use free tier with rate limits.');
       return undefined;
     }
 
@@ -285,14 +288,54 @@ class InitWizard {
     return key.substring(0, 4) + '...' + key.substring(key.length - 4);
   }
 
+  private async configureImageProcessing(): Promise<Partial<AIConfig>> {
+    console.log('\\nStep 3: AI Image Processing Configuration (Optional)');
+    console.log('Configure AI image generation to replace placeholder images with real AI-generated images.\\n');
+    console.log('📌 This feature can automatically replace Picsum placeholder images in your mock data');
+    console.log('   with contextually appropriate AI-generated images using Hugging Face models.\\n');
+
+    const enableImages = await this.askQuestion('Do you want to enable AI image processing? (y/n) ');
+    
+    if (enableImages.toLowerCase() !== 'y' && enableImages.toLowerCase() !== 'yes') {
+      console.log('✅ AI image processing disabled. Mock data will use placeholder images as-is.');
+      return {};
+    }
+
+    console.log('\\n🎨 Configuring AI image processing...');
+    
+    // Step 3a: Hugging Face API Key
+    const hfApiKey = await this.getHuggingFaceApiKey();
+    
+    // Step 3b: Storage Configuration
+    const storageConfig = await this.configureStorage();
+    
+    const config = {
+      HUGGINGFACE_API_KEY: hfApiKey,
+      ...storageConfig
+    };
+
+    if (hfApiKey || Object.keys(storageConfig).length > 0) {
+      console.log('\\n✅ AI image processing configured successfully!');
+      console.log('   • Images will be generated using AI models');
+      if (Object.keys(storageConfig).length > 0) {
+        console.log('   • Generated images will be uploaded to cloud storage');
+      } else {
+        console.log('   • Generated images will be saved as base64 data URLs');
+      }
+    }
+
+    return config;
+  }
+
   private async configureStorage(): Promise<Partial<AIConfig>> {
-    console.log('\\nStep 3: Storage Configuration (Optional)');
-    console.log('Configure cloud storage for image storage. Leave blank to skip.\\n');
+    console.log('\\n📦 Cloud Storage Configuration (Optional)');
+    console.log('Configure cloud storage to upload generated images. Without storage,');
+    console.log('images will be embedded as base64 data URLs (larger file sizes).\\n');
 
     const useStorage = await this.askQuestion('Do you want to configure cloud storage for images? (y/n) ');
     
     if (useStorage.toLowerCase() !== 'y' && useStorage.toLowerCase() !== 'yes') {
-      console.log('Skipping storage configuration.');
+      console.log('   Skipping cloud storage. Images will be embedded as base64.');
       return {};
     }
 

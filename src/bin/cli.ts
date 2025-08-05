@@ -167,11 +167,13 @@ async function main(): Promise<void> {
   console.log(`Output: ${outputFile}\\n`);
   
   // Determina se abilitare il post-processing delle immagini
-  let enableImageProcessing = true; // Default: abilitato
+  let enableImageProcessing: boolean | undefined = undefined; // Default: auto-detect
   if (args.disableImageProcessing) {
     enableImageProcessing = false;
+    console.log('🚫 AI image processing explicitly disabled');
   } else if (args.enableImageProcessing) {
     enableImageProcessing = true;
+    console.log('🎨 AI image processing explicitly enabled');
   }
 
   const generator = new MockGeneratorService(undefined, enableImageProcessing);

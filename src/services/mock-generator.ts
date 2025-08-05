@@ -9,21 +9,57 @@ export class MockGeneratorService {
   private openRouter: OpenRouterService;
   private postProcessor?: PostProcessingOrchestrator;
 
-  constructor(config?: OpenRouterConfig, enableImageProcessing: boolean = true) {
+  constructor(config?: OpenRouterConfig, enableImageProcessing?: boolean) {
     this.openRouter = new OpenRouterService(
       config || OpenRouterService.getDefaultConfig(),
       'mockGenerator'
     );
     
-    if (enableImageProcessing) {
+    // Auto-detect se abilitare il post-processing se non specificato
+    const shouldEnableImageProcessing = enableImageProcessing ?? this.shouldEnableImageProcessing();
+    
+    if (shouldEnableImageProcessing) {
       try {
         // Tenta di inizializzare il post-processor con la chiave HuggingFace
         const hfKey = this.getHuggingFaceApiKey();
         this.postProcessor = new PostProcessingOrchestrator(hfKey || undefined);
+        console.log('🎨 AI image processing enabled');
       } catch (error) {
         console.warn('⚠️  Image processing disabled: Failed to initialize post-processor');
       }
+    } else {
+      console.log('📋 AI image processing disabled - using placeholder images');
     }
+  }
+
+  private shouldEnableImageProcessing(): boolean {
+    try {
+      // Controlla se c'è configurazione per image processing nel .env
+      const hfKey = this.getHuggingFaceApiKey();
+      const hasStorageProvider = process.env.STORAGE_PROVIDER || this.getEnvValue('STORAGE_PROVIDER');
+      
+      // Abilita se ha almeno una configurazione di image processing
+      return !!(hfKey || hasStorageProvider);
+    } catch {
+      return false;
+    }
+  }
+
+  private getEnvValue(key: string): string | null {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const envPath = path.join(process.cwd(), '.env');
+      
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const match = envContent.match(new RegExp(`${key}=(.+)`));
+        return match ? match[1].trim() : null;
+      }
+    } catch (error) {
+      // Ignora errori
+    }
+    return null;
   }
 
   private getHuggingFaceApiKey(): string | null {
