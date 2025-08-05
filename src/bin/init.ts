@@ -11,6 +11,7 @@ interface AIConfig {
   OPENROUTER_API_KEY: string;
   OPENROUTER_DEFAULT_MODEL?: string;
   OPENROUTER_MOCK_GENERATOR_MODEL?: string;
+  HUGGINGFACE_API_KEY?: string;
   STORAGE_PROVIDER?: 'aws' | 'digitalocean';
   // AWS S3 Configuration
   AWS_ACCESS_KEY_ID?: string;
@@ -65,13 +66,17 @@ class InitWizard {
     // Step 2: Model Selection
     const models = await this.selectModels();
     
-    // Step 3: Storage Configuration (optional)
+    // Step 3: Hugging Face API Key (optional)
+    const hfApiKey = await this.getHuggingFaceApiKey();
+    
+    // Step 4: Storage Configuration (optional)
     const storageConfig = await this.configureStorage();
     
     return {
       OPENROUTER_API_KEY: apiKey,
       OPENROUTER_DEFAULT_MODEL: models.default,
       OPENROUTER_MOCK_GENERATOR_MODEL: models.mockGenerator,
+      HUGGINGFACE_API_KEY: hfApiKey,
       ...storageConfig
     };
   }
@@ -168,6 +173,56 @@ class InitWizard {
     }
     
     return selectedModel?.id;
+  }
+
+  private async getHuggingFaceApiKey(): Promise<string | undefined> {
+    console.log('\\nStep 3: Hugging Face API Key (Optional)');
+    console.log('For image generation using Hugging Face models. Leave blank to skip.\\n');
+    console.log('📌 Create a token at: \\x1b[36mhttps://huggingface.co/settings/tokens\\x1b[0m');
+    console.log('   (Needs "Inference Providers" permission)\\n');
+
+    const useHF = await this.askQuestion('Do you want to configure Hugging Face for image generation? (y/n) ');
+    
+    if (useHF.toLowerCase() !== 'y' && useHF.toLowerCase() !== 'yes') {
+      console.log('Skipping Hugging Face configuration. You can still generate images with rate limits.');
+      return undefined;
+    }
+
+    const existingKey = this.getExistingHuggingFaceKey();
+    if (existingKey) {
+      const keep = await this.askQuestion(`Found existing HF token (${this.maskApiKey(existingKey)}). Keep it? (y/n) `);
+      if (keep.toLowerCase() === 'y' || keep.toLowerCase() === 'yes') {
+        return existingKey;
+      }
+    }
+
+    let apiKey = '';
+    while (!apiKey || !this.isValidHuggingFaceKey(apiKey)) {
+      apiKey = await this.askQuestion('Enter your Hugging Face token (hf_...): ');
+      if (!apiKey.trim()) {
+        console.log('Skipping Hugging Face token.');
+        return undefined;
+      }
+      if (!this.isValidHuggingFaceKey(apiKey)) {
+        console.log('❌ Invalid token format. Should start with "hf_". Please try again.\\n');
+      }
+    }
+
+    console.log('✅ Hugging Face token configured! You can now generate images with better rate limits.');
+    return apiKey;
+  }
+
+  private getExistingHuggingFaceKey(): string | null {
+    if (existsSync(ENV_FILE_PATH)) {
+      const envContent = readFileSync(ENV_FILE_PATH, 'utf8');
+      const match = envContent.match(/HUGGINGFACE_API_KEY=(.+)/);
+      return match ? match[1].trim() : null;
+    }
+    return null;
+  }
+
+  private isValidHuggingFaceKey(key: string): boolean {
+    return key.startsWith('hf_') && key.length > 10;
   }
 
   private categorizeModels(models: OpenRouterModel[]): ModelCategory[] {
@@ -446,6 +501,7 @@ class InitWizard {
         if (!line.startsWith('OPENROUTER_') && 
             !line.startsWith('AWS_') && 
             !line.startsWith('DO_') && 
+            !line.startsWith('HUGGINGFACE_') &&
             !line.startsWith('STORAGE_PROVIDER')) {
           lines.push(line);
         }
@@ -459,6 +515,11 @@ class InitWizard {
     }
     if (config.OPENROUTER_MOCK_GENERATOR_MODEL) {
       lines.push(`OPENROUTER_MOCK_GENERATOR_MODEL=${config.OPENROUTER_MOCK_GENERATOR_MODEL}`);
+    }
+    
+    // Hugging Face configuration
+    if (config.HUGGINGFACE_API_KEY) {
+      lines.push(`HUGGINGFACE_API_KEY=${config.HUGGINGFACE_API_KEY}`);
     }
     
     // Storage provider

@@ -28,13 +28,10 @@ class ImageGeneratorCLI {
         return;
       }
 
-      const apiKey = this.getApiKey();
-      if (!apiKey) {
-        console.error('❌ OpenRouter API key not found. Run "ai-init" first.');
-        process.exit(1);
-      }
-
-      this.generator = new ImageMockGenerator(apiKey);
+      const hfApiKey = this.getHuggingFaceApiKey();
+      // Note: Hugging Face API key is optional for some models
+      
+      this.generator = new ImageMockGenerator(hfApiKey || undefined);
       
       console.log('🤖 AI Image Generator');
       console.log(`📝 Generating ${options.prompts.length} image(s)...`);
@@ -125,11 +122,11 @@ class ImageGeneratorCLI {
     return options;
   }
 
-  private getApiKey(): string | null {
+  private getHuggingFaceApiKey(): string | null {
     try {
       const envPath = join(process.cwd(), '.env');
       const envContent = readFileSync(envPath, 'utf8');
-      const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
+      const match = envContent.match(/HUGGINGFACE_API_KEY=(.+)/);
       return match ? match[1].trim() : null;
     } catch {
       return null;
@@ -192,7 +189,12 @@ EXAMPLES:
   ai-generate-images --model "openrouter/horizon-beta" --size "1024x1024" "Abstract art"
 
 SETUP:
-  Run 'ai-init' first to configure your OpenRouter API key and cloud storage (AWS S3 or DigitalOcean Spaces).
+  1. Run 'ai-init' to configure cloud storage (AWS S3 or DigitalOcean Spaces)
+  2. (Optional) Set HUGGINGFACE_API_KEY in .env for better rate limits
+  
+NOTE:
+  This tool uses Hugging Face Inference API for image generation.
+  Some models work without API key but with rate limits.
 `);
   }
 }

@@ -25,9 +25,12 @@ export class ImageMockGenerator {
   private doStorage?: DigitalOceanSpaces;
   private config: any;
 
-  constructor(openRouterApiKey: string) {
-    this.imageGenerator = new ImageGenerator(openRouterApiKey);
+  constructor(huggingfaceApiKey?: string) {
     this.loadConfiguration();
+    
+    // Use Hugging Face API key from parameter or config
+    const hfApiKey = huggingfaceApiKey || this.config.HUGGINGFACE_API_KEY;
+    this.imageGenerator = new ImageGenerator(hfApiKey);
     
     // Initialize storage based on provider
     if (this.config.STORAGE_PROVIDER === 'aws' && this.hasS3Config()) {
@@ -55,12 +58,45 @@ export class ImageMockGenerator {
       const envContent = readFileSync(envPath, 'utf8');
       
       this.config = {};
+      
+      // Parse .env content properly, handling escape sequences
       envContent.split('\n').forEach(line => {
-        const [key, value] = line.split('=');
-        if (key && value) {
-          this.config[key.trim()] = value.trim();
+        line = line.trim();
+        
+        // Skip empty lines and comments
+        if (!line || line.startsWith('#')) {
+          return;
+        }
+        
+        const equalIndex = line.indexOf('=');
+        if (equalIndex === -1) {
+          return;
+        }
+        
+        const key = line.substring(0, equalIndex).trim();
+        let value = line.substring(equalIndex + 1).trim();
+        
+        // Handle quoted values
+        if ((value.startsWith('"') && value.endsWith('"')) || 
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        
+        // Replace escape sequences
+        value = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        
+        if (key) {
+          this.config[key] = value;
         }
       });
+      
+      console.log('📋 Loaded configuration:', {
+        STORAGE_PROVIDER: this.config.STORAGE_PROVIDER,
+        DO_SPACES_REGION: this.config.DO_SPACES_REGION,
+        DO_SPACES_NAME: this.config.DO_SPACES_NAME,
+        HAS_DO_ACCESS_KEY: !!this.config.DO_SPACES_ACCESS_KEY
+      });
+      
     } catch (error) {
       console.warn('Could not load .env file. Some features may not work.');
       this.config = {};
@@ -208,7 +244,7 @@ export class ImageMockGenerator {
   }
 
   async getAvailableModels() {
-    return this.imageGenerator.getAvailableImageModels();
+    return this.imageGenerator.getAvailableModels();
   }
 
   async testCloudConnection(): Promise<boolean> {
