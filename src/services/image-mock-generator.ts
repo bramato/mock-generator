@@ -1,36 +1,50 @@
 import { ImageGenerator, ImageGenerationOptions } from './image-generator';
-import { AWSS3Storage, S3Config, UploadResult } from './aws-s3-storage';
+import { AWSS3Storage, S3Config, UploadResult as S3UploadResult } from './aws-s3-storage';
+import { DigitalOceanSpaces, UploadResult as DOUploadResult } from './digitalocean-spaces';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+export type UploadResult = S3UploadResult | DOUploadResult;
+
 export interface ImageMockOptions extends ImageGenerationOptions {
-  uploadToS3?: boolean;
+  uploadToCloud?: boolean;
   filename?: string;
 }
 
 export interface ImageMockResult {
   prompt: string;
   imageUrl: string;
-  s3Upload?: UploadResult;
+  cloudUpload?: UploadResult;
+  cdnUrl?: string;
   localPath?: string;
 }
 
 export class ImageMockGenerator {
   private imageGenerator: ImageGenerator;
   private s3Storage?: AWSS3Storage;
+  private doStorage?: DigitalOceanSpaces;
   private config: any;
 
   constructor(openRouterApiKey: string) {
     this.imageGenerator = new ImageGenerator(openRouterApiKey);
     this.loadConfiguration();
     
-    if (this.hasS3Config()) {
+    // Initialize storage based on provider
+    if (this.config.STORAGE_PROVIDER === 'aws' && this.hasS3Config()) {
       this.s3Storage = new AWSS3Storage({
         accessKeyId: this.config.AWS_ACCESS_KEY_ID,
         secretAccessKey: this.config.AWS_SECRET_ACCESS_KEY,
         region: this.config.AWS_REGION,
         bucketName: this.config.AWS_S3_BUCKET_NAME,
         endpoint: this.config.AWS_S3_ENDPOINT
+      });
+    } else if (this.config.STORAGE_PROVIDER === 'digitalocean' && this.hasDOConfig()) {
+      this.doStorage = new DigitalOceanSpaces({
+        accessKeyId: this.config.DO_SPACES_ACCESS_KEY,
+        secretAccessKey: this.config.DO_SPACES_SECRET_KEY,
+        region: this.config.DO_SPACES_REGION,
+        spaceName: this.config.DO_SPACES_NAME,
+        apiToken: this.config.DO_API_TOKEN
       });
     }
   }
@@ -62,10 +76,19 @@ export class ImageMockGenerator {
     );
   }
 
+  private hasDOConfig(): boolean {
+    return !!(
+      this.config.DO_SPACES_ACCESS_KEY &&
+      this.config.DO_SPACES_SECRET_KEY &&
+      this.config.DO_SPACES_REGION &&
+      this.config.DO_SPACES_NAME
+    );
+  }
+
   async generateImageMock(options: ImageMockOptions): Promise<ImageMockResult> {
     const {
       prompt,
-      uploadToS3 = false,
+      uploadToCloud = false,
       filename = `generated-${Date.now()}`,
       ...imageOptions
     } = options;
@@ -84,12 +107,11 @@ export class ImageMockGenerator {
 
       const imageData = imageResponse.data[0];
       let finalImageUrl = imageData.url;
-      let s3Upload: UploadResult | undefined;
+      let cloudUpload: UploadResult | undefined;
+      let cdnUrl: string | undefined;
 
-      // Upload to S3 if requested and configured
-      if (uploadToS3 && this.s3Storage) {
-        console.log('☁️  Uploading to S3...');
-        
+      // Upload to cloud storage if requested and configured
+      if (uploadToCloud) {
         // Get image data as base64
         const base64Images = await this.imageGenerator.generateImageFromBase64({
           prompt,
@@ -98,23 +120,40 @@ export class ImageMockGenerator {
         });
 
         if (base64Images.length > 0) {
-          s3Upload = await this.s3Storage.uploadImage(
-            base64Images[0],
-            `${filename}.png`,
-            'image/png'
-          );
-          
-          finalImageUrl = s3Upload.url;
-          console.log(`✅ Image uploaded to S3: ${finalImageUrl}`);
+          if (this.s3Storage) {
+            console.log('☁️  Uploading to AWS S3...');
+            cloudUpload = await this.s3Storage.uploadImage(
+              base64Images[0],
+              `${filename}.png`,
+              'image/png'
+            );
+            finalImageUrl = cloudUpload.url;
+            console.log(`✅ Image uploaded to S3: ${finalImageUrl}`);
+            
+          } else if (this.doStorage) {
+            console.log('☁️  Uploading to DigitalOcean Spaces...');
+            cloudUpload = await this.doStorage.uploadImage(
+              base64Images[0],
+              `${filename}.png`,
+              'image/png'
+            );
+            finalImageUrl = cloudUpload.url;
+            cdnUrl = (cloudUpload as DOUploadResult).cdnUrl;
+            console.log(`✅ Image uploaded to Spaces: ${finalImageUrl}`);
+            if (cdnUrl) {
+              console.log(`📡 CDN URL: ${cdnUrl}`);
+            }
+          } else {
+            console.warn('⚠️  Cloud upload requested but no storage provider is configured. Using original URL.');
+          }
         }
-      } else if (uploadToS3 && !this.s3Storage) {
-        console.warn('⚠️  S3 upload requested but S3 is not configured. Using original URL.');
       }
 
       return {
         prompt,
         imageUrl: finalImageUrl,
-        s3Upload,
+        cloudUpload,
+        cdnUrl,
         localPath: undefined // Could implement local saving if needed
       };
 
@@ -157,7 +196,8 @@ export class ImageMockGenerator {
         results.push({
           prompt,
           imageUrl: '',
-          s3Upload: undefined,
+          cloudUpload: undefined,
+          cdnUrl: undefined,
           localPath: undefined
         });
       }
@@ -171,20 +211,24 @@ export class ImageMockGenerator {
     return this.imageGenerator.getAvailableImageModels();
   }
 
-  async testS3Connection(): Promise<boolean> {
-    if (!this.s3Storage) {
-      return false;
+  async testCloudConnection(): Promise<boolean> {
+    if (this.s3Storage) {
+      return this.s3Storage.testConnection();
+    } else if (this.doStorage) {
+      return this.doStorage.testConnection();
     }
     
-    return this.s3Storage.testConnection();
+    return false;
   }
 
   formatResultsAsJSON(results: ImageMockResult[]): string {
     return JSON.stringify(results.map(result => ({
       prompt: result.prompt,
       imageUrl: result.imageUrl,
-      s3Key: result.s3Upload?.key,
-      uploadStatus: result.s3Upload ? 'uploaded' : 'not_uploaded'
+      cdnUrl: result.cdnUrl,
+      cloudKey: result.cloudUpload?.key,
+      uploadStatus: result.cloudUpload ? 'uploaded' : 'not_uploaded',
+      storageProvider: this.config.STORAGE_PROVIDER || 'none'
     })), null, 2);
   }
 
@@ -199,8 +243,13 @@ export class ImageMockGenerator {
         markdown += `![Generated Image](${result.imageUrl})\n\n`;
         markdown += `**URL:** [${result.imageUrl}](${result.imageUrl})\n\n`;
         
-        if (result.s3Upload) {
-          markdown += `**S3 Key:** ${result.s3Upload.key}\n\n`;
+        if (result.cdnUrl) {
+          markdown += `**CDN URL:** [${result.cdnUrl}](${result.cdnUrl})\n\n`;
+        }
+        
+        if (result.cloudUpload) {
+          markdown += `**Storage Key:** ${result.cloudUpload.key}\n\n`;
+          markdown += `**Provider:** ${this.config.STORAGE_PROVIDER || 'unknown'}\n\n`;
         }
       } else {
         markdown += `❌ *Image generation failed*\n\n`;

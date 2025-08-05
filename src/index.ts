@@ -4,6 +4,7 @@ export { OpenRouterService } from './services/openrouter';
 export { OpenRouterAPI } from './services/openrouter-api';
 export { ImageGenerator } from './services/image-generator';
 export { AWSS3Storage } from './services/aws-s3-storage';
+export { DigitalOceanSpaces } from './services/digitalocean-spaces';
 export { ImageMockGenerator } from './services/image-mock-generator';
 
 // Utilities

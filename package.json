@@ -7,6 +7,7 @@
   "bin": {
     "ai-generate-mock": "dist/bin/cli.js",
     "ai-generate-images": "dist/bin/generate-images.js",
+    "ai-spaces-manager": "dist/bin/spaces-manager.js",
     "ai-init": "dist/bin/init.js"
   },
   "scripts": {

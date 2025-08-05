@@ -11,7 +11,7 @@ interface CLIOptions {
   quality?: 'standard' | 'hd';
   style?: 'vivid' | 'natural';
   count?: number;
-  uploadToS3?: boolean;
+  uploadToCloud?: boolean;
   output?: string;
   format?: 'json' | 'markdown';
 }
@@ -46,7 +46,7 @@ class ImageGeneratorCLI {
           size: options.size,
           quality: options.quality,
           style: options.style,
-          uploadToS3: options.uploadToS3
+          uploadToCloud: options.uploadToCloud
         }
       );
 
@@ -68,7 +68,7 @@ class ImageGeneratorCLI {
     const args = process.argv.slice(2);
     const options: CLIOptions = {
       prompts: [],
-      uploadToS3: false,
+      uploadToCloud: false,
       format: 'json'
     };
 
@@ -95,9 +95,11 @@ class ImageGeneratorCLI {
         case '-c':
           options.count = parseInt(args[++i]);
           break;
+        case '--upload-cloud':
+        case '--cloud':
         case '--upload-s3':
         case '--s3':
-          options.uploadToS3 = true;
+          options.uploadToCloud = true;
           break;
         case '--output':
         case '-o':
@@ -171,7 +173,7 @@ OPTIONS:
   -q, --quality <quality>   Image quality (standard, hd)
   --style <style>           Image style (vivid, natural)
   -c, --count <number>      Number of images per prompt (default: 1)
-  --s3, --upload-s3         Upload images to S3 (requires AWS config)
+  --cloud, --upload-cloud   Upload images to configured cloud storage (AWS S3 or DigitalOcean Spaces)
   -o, --output <file>       Save results to file
   -f, --format <format>     Output format (json, markdown)
   -h, --help                Show this help
@@ -183,14 +185,14 @@ EXAMPLES:
   # Generate multiple images
   ai-generate-images "Cat playing piano" "Dog reading book" "Robot cooking"
 
-  # Upload to S3 and save as markdown
-  ai-generate-images --s3 --format markdown --output results.md "AI generated art"
+  # Upload to cloud storage and save as markdown
+  ai-generate-images --cloud --format markdown --output results.md "AI generated art"
 
   # Specify model and size
   ai-generate-images --model "openrouter/horizon-beta" --size "1024x1024" "Abstract art"
 
 SETUP:
-  Run 'ai-init' first to configure your OpenRouter API key and AWS S3 settings.
+  Run 'ai-init' first to configure your OpenRouter API key and cloud storage (AWS S3 or DigitalOcean Spaces).
 `);
   }
 }
