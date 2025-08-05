@@ -11,6 +11,11 @@ interface AIConfig {
   OPENROUTER_API_KEY: string;
   OPENROUTER_DEFAULT_MODEL?: string;
   OPENROUTER_MOCK_GENERATOR_MODEL?: string;
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  AWS_REGION?: string;
+  AWS_S3_BUCKET_NAME?: string;
+  AWS_S3_ENDPOINT?: string;
 }
 
 class InitWizard {
@@ -52,10 +57,14 @@ class InitWizard {
     // Step 2: Model Selection
     const models = await this.selectModels();
     
+    // Step 3: AWS S3 Configuration (optional)
+    const awsConfig = await this.configureAWS();
+    
     return {
       OPENROUTER_API_KEY: apiKey,
       OPENROUTER_DEFAULT_MODEL: models.default,
-      OPENROUTER_MOCK_GENERATOR_MODEL: models.mockGenerator
+      OPENROUTER_MOCK_GENERATOR_MODEL: models.mockGenerator,
+      ...awsConfig
     };
   }
 
@@ -213,6 +222,63 @@ class InitWizard {
     return key.substring(0, 4) + '...' + key.substring(key.length - 4);
   }
 
+  private async configureAWS(): Promise<Partial<AIConfig>> {
+    console.log('\\nStep 3: AWS S3 Configuration (Optional)');
+    console.log('Configure AWS S3 for image storage. Leave blank to skip.\\n');
+
+    const useAWS = await this.askQuestion('Do you want to configure AWS S3 for image storage? (y/n) ');
+    
+    if (useAWS.toLowerCase() !== 'y' && useAWS.toLowerCase() !== 'yes') {
+      console.log('Skipping AWS S3 configuration.');
+      return {};
+    }
+
+    console.log('\\n📌 You can get AWS credentials from: \\x1b[36mhttps://console.aws.amazon.com/iam/home#/security_credentials\\x1b[0m');
+    console.log('   (Create an IAM user with S3 permissions)\\n');
+
+    const accessKeyId = await this.askQuestion('AWS Access Key ID: ');
+    if (!accessKeyId.trim()) return {};
+
+    const secretAccessKey = await this.askQuestion('AWS Secret Access Key: ');
+    if (!secretAccessKey.trim()) return {};
+
+    const region = await this.askQuestion('AWS Region (default: us-east-1): ') || 'us-east-1';
+    const bucketName = await this.askQuestion('S3 Bucket Name: ');
+    if (!bucketName.trim()) return {};
+
+    const endpoint = await this.askQuestion('Custom S3 Endpoint (optional, for S3-compatible services): ');
+
+    // Test AWS connection
+    console.log('\\n🔄 Testing AWS S3 connection...');
+    try {
+      const { AWSS3Storage } = await import('../services/aws-s3-storage');
+      const s3 = new AWSS3Storage({
+        accessKeyId,
+        secretAccessKey,
+        region,
+        bucketName,
+        endpoint: endpoint || undefined
+      });
+
+      const isConnected = await s3.testConnection();
+      if (isConnected) {
+        console.log('✅ AWS S3 connection successful!');
+      } else {
+        console.log('⚠️  AWS S3 connection test failed, but configuration will be saved.');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not test AWS S3 connection, but configuration will be saved.');
+    }
+
+    return {
+      AWS_ACCESS_KEY_ID: accessKeyId,
+      AWS_SECRET_ACCESS_KEY: secretAccessKey,
+      AWS_REGION: region,
+      AWS_S3_BUCKET_NAME: bucketName,
+      AWS_S3_ENDPOINT: endpoint || undefined
+    };
+  }
+
   private writeConfiguration(config: AIConfig): void {
     const lines: string[] = [];
     
@@ -221,18 +287,36 @@ class InitWizard {
       const existingLines = existing.split('\\n');
       
       existingLines.forEach(line => {
-        if (!line.startsWith('OPENROUTER_')) {
+        if (!line.startsWith('OPENROUTER_') && !line.startsWith('AWS_')) {
           lines.push(line);
         }
       });
     }
     
+    // OpenRouter configuration
     lines.push(`OPENROUTER_API_KEY=${config.OPENROUTER_API_KEY}`);
     if (config.OPENROUTER_DEFAULT_MODEL) {
       lines.push(`OPENROUTER_DEFAULT_MODEL=${config.OPENROUTER_DEFAULT_MODEL}`);
     }
     if (config.OPENROUTER_MOCK_GENERATOR_MODEL) {
       lines.push(`OPENROUTER_MOCK_GENERATOR_MODEL=${config.OPENROUTER_MOCK_GENERATOR_MODEL}`);
+    }
+    
+    // AWS configuration (if provided)
+    if (config.AWS_ACCESS_KEY_ID) {
+      lines.push(`AWS_ACCESS_KEY_ID=${config.AWS_ACCESS_KEY_ID}`);
+    }
+    if (config.AWS_SECRET_ACCESS_KEY) {
+      lines.push(`AWS_SECRET_ACCESS_KEY=${config.AWS_SECRET_ACCESS_KEY}`);
+    }
+    if (config.AWS_REGION) {
+      lines.push(`AWS_REGION=${config.AWS_REGION}`);
+    }
+    if (config.AWS_S3_BUCKET_NAME) {
+      lines.push(`AWS_S3_BUCKET_NAME=${config.AWS_S3_BUCKET_NAME}`);
+    }
+    if (config.AWS_S3_ENDPOINT) {
+      lines.push(`AWS_S3_ENDPOINT=${config.AWS_S3_ENDPOINT}`);
     }
     
     writeFileSync(ENV_FILE_PATH, lines.filter(line => line.trim()).join('\\n') + '\\n');

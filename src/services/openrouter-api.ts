@@ -77,6 +77,69 @@ export class OpenRouterAPI {
     });
   }
 
+  async fetchImageGenerationModels(): Promise<OpenRouterModel[]> {
+    try {
+      const response = await fetch(`${this.baseURL}/models`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as any;
+      let models = data.data || [];
+      
+      // Filter for image generation capable models
+      models = this.filterImageGenerationModels(models);
+      
+      return models;
+    } catch (error) {
+      console.error('Error fetching image generation models:', error);
+      return this.getFallbackImageModels();
+    }
+  }
+
+  private filterImageGenerationModels(models: OpenRouterModel[]): OpenRouterModel[] {
+    // Models known to support image generation
+    const imageGenerationPatterns = [
+      /flux/i,                    // FLUX models
+      /dall-e/i,                  // DALL-E models
+      /stable-diffusion/i,        // Stable Diffusion
+      /midjourney/i,             // Midjourney
+      /imagen/i,                 // Google Imagen
+    ];
+    
+    return models.filter(model => {
+      // Check if model supports image generation based on architecture
+      const isImageModel = model.architecture?.modality?.includes('image') || 
+                          model.architecture?.modality === 'text->image';
+      
+      // Check if model ID matches known image generation patterns
+      const isKnownImageModel = imageGenerationPatterns.some(pattern => 
+        pattern.test(model.id) || pattern.test(model.name || '')
+      );
+      
+      // Check if model has image pricing
+      const hasImagePricing = model.pricing?.image !== undefined;
+      
+      return isImageModel || isKnownImageModel || hasImagePricing;
+    });
+  }
+
+  getFallbackImageModels(): OpenRouterModel[] {
+    return [
+      {
+        id: 'openrouter/horizon-beta',
+        name: 'Horizon Beta',
+        description: 'Free multimodal model for image generation',
+        pricing: { prompt: '0', completion: '0', image: '0' },
+        context_length: 256000,
+        architecture: { modality: 'text->image', tokenizer: 'Horizon' },
+        top_provider: {},
+        supported_generation_methods: ['image_generation']
+      }
+    ];
+  }
+
   formatModelForDisplay(model: OpenRouterModel): string {
     const price = parseFloat(model.pricing.prompt);
     let priceStr: string;
