@@ -1,6 +1,6 @@
 {
   "name": "@bramato/openrouter-mock-generator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered mock data generator using OpenRouter API with JSON mode support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
