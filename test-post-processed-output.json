@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1001,
+    "name": "Smartphone Premium XR",
+    "description": "Telefono di ultima generazione con fotocamera avanzata",
+    "price": 899.99,
+    "category": "electronics",
+    "brand": "TechPro",
+    "image": "https://picsum.photos/800/600?random=smartphone1",
+    "thumbnail": "https://picsum.photos/200/200?random=smartphone1",
+    "banner": "https://picsum.photos/1200/300?random=banner1",
+    "gallery": [
+      "https://picsum.photos/400/400?random=gallery1",
+      "https://picsum.photos/400/400?random=gallery2"
+    ],
+    "features": [
+      {
+        "name": "Fotocamera 108MP",
+        "icon": "https://picsum.photos/64/64?random=camera"
+      },
+      {
+        "name": "5G Ready",
+        "icon": "https://picsum.photos/64/64?random=5g"
+      }
+    ]
+  },
+  {
+    "id": 1002,
+    "name": "Laptop Gaming Pro",
+    "description": "Computer portatile per gaming professionale",
+    "price": 1299.99,
+    "category": "computers",
+    "brand": "GameTech",
+    "image": "https://picsum.photos/800/600?random=laptop1",
+    "thumbnail": "https://picsum.photos/200/200?random=laptop1",
+    "banner": "https://picsum.photos/1200/300?random=banner2",
+    "gallery": [
+      "https://picsum.photos/400/400?random=laptop2",
+      "https://picsum.photos/400/400?random=laptop3"
+    ],
+    "features": [
+      {
+        "name": "RTX Graphics",
+        "icon": "https://picsum.photos/64/64?random=gpu"
+      },
+      {
+        "name": "16GB RAM",
+        "icon": "https://picsum.photos/64/64?random=ram"
+      }
+    ]
+  }
+]

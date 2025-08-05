@@ -3,15 +3,51 @@ import { constants } from 'fs';
 import { OpenRouterService } from './openrouter';
 import { PatternAnalyzer } from '../utils/pattern-analyzer';
 import { MockGenerationRequest, MockGenerationResult, OpenRouterConfig } from '../types/index';
+import { PostProcessingOrchestrator, type PostProcessingOptions } from './post-processing-orchestrator';
 
 export class MockGeneratorService {
   private openRouter: OpenRouterService;
+  private postProcessor?: PostProcessingOrchestrator;
 
-  constructor(config?: OpenRouterConfig) {
+  constructor(config?: OpenRouterConfig, enableImageProcessing: boolean = true) {
     this.openRouter = new OpenRouterService(
       config || OpenRouterService.getDefaultConfig(),
       'mockGenerator'
     );
+    
+    if (enableImageProcessing) {
+      try {
+        // Tenta di inizializzare il post-processor con la chiave HuggingFace
+        const hfKey = this.getHuggingFaceApiKey();
+        this.postProcessor = new PostProcessingOrchestrator(hfKey || undefined);
+      } catch (error) {
+        console.warn('⚠️  Image processing disabled: Failed to initialize post-processor');
+      }
+    }
+  }
+
+  private getHuggingFaceApiKey(): string | null {
+    try {
+      // Cerca nelle variabili d'ambiente
+      if (process.env.HUGGINGFACE_API_KEY) {
+        return process.env.HUGGINGFACE_API_KEY;
+      }
+
+      // Cerca nel file .env (sync per compatibilità con costruttore)
+      const fs = require('fs');
+      const path = require('path');
+      const envPath = path.join(process.cwd(), '.env');
+      
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const match = envContent.match(/HUGGINGFACE_API_KEY=(.+)/);
+        return match ? match[1].trim() : null;
+      }
+    } catch (error) {
+      // Ignora errori, il post-processing funzionerà comunque senza chiave API
+    }
+    
+    return null;
   }
 
   private async fileExists(filePath: string): Promise<boolean> {
@@ -211,6 +247,38 @@ Generate exactly ${count} item${count > 1 ? 's' : ''}.`;
         // Dynamic delay based on batch size
         const delay = Math.max(500, currentBatchSize * 200);
         await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      // Post-processing: sostituisci immagini Picsum con AI generate
+      if (this.postProcessor && request.enableImageProcessing !== false) {
+        try {
+          console.log('\n🎨 Starting image post-processing...');
+          
+          const finalData = await readFile(request.outputFile, 'utf8');
+          const parsedData = JSON.parse(finalData);
+          
+          const postProcessingResult = await this.postProcessor.processData(parsedData);
+          
+          if (postProcessingResult.success) {
+            // Salva dati con immagini sostituite
+            const processedContent = JSON.stringify(postProcessingResult.processedData, null, 2);
+            await writeFile(request.outputFile, processedContent, 'utf8');
+            
+            console.log(`✅ Image post-processing completed!`);
+            console.log(`   • Original images: ${postProcessingResult.originalImageCount}`);
+            console.log(`   • Processed images: ${postProcessingResult.processedImageCount}`);
+            console.log(`   • Generated images: ${postProcessingResult.generatedImageCount}`);
+            if (postProcessingResult.optimizationSavings > 0) {
+              console.log(`   • Optimization savings: ${postProcessingResult.optimizationSavings.toFixed(1)}%`);
+            }
+          } else {
+            console.warn('⚠️  Image post-processing failed:', postProcessingResult.errors.join(', '));
+            console.log('   Continuing with original Picsum images...');
+          }
+        } catch (error) {
+          console.warn('⚠️  Image post-processing error:', error instanceof Error ? error.message : 'Unknown error');
+          console.log('   Continuing with original Picsum images...');
+        }
       }
 
       return {

@@ -10,6 +10,7 @@ export interface MockGenerationRequest {
   count: number;
   arrayPath?: string;
   preferences?: string;
+  enableImageProcessing?: boolean;
 }
 
 export interface MockGenerationResult {

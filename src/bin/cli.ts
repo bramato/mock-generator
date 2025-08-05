@@ -12,6 +12,8 @@ interface CliArgs {
   preferences?: string;
   analyze?: boolean;
   help?: boolean;
+  enableImageProcessing?: boolean;
+  disableImageProcessing?: boolean;
 }
 
 function parseArgs(args: string[]): CliArgs {
@@ -45,6 +47,14 @@ function parseArgs(args: string[]): CliArgs {
       case '-a':
         parsed.analyze = true;
         break;
+      case '--enable-images':
+      case '--images':
+        parsed.enableImageProcessing = true;
+        break;
+      case '--disable-images':
+      case '--no-images':
+        parsed.disableImageProcessing = true;
+        break;
       default:
         if (!arg.startsWith('-') && !parsed.inputFile) {
           parsed.inputFile = arg;
@@ -68,6 +78,8 @@ Options:
   -o, --output <file>       Output file path (default: input_mock.json)
   -p, --array-path <path>   Specific array path to use (e.g. 'data.items')
   --preferences, --pref <text>  Custom preferences for data generation
+  --images, --enable-images Force enable AI image processing (replaces Picsum URLs)
+  --no-images, --disable-images  Disable AI image processing (keep Picsum URLs)
   -a, --analyze             Analyze input file structure without generating
   -h, --help                Show this help message
 
@@ -76,6 +88,8 @@ Examples:
   ai-generate-mock data.json --output generated_data.json --count 100
   ai-generate-mock users.json --array-path "users" --count 25
   ai-generate-mock products.json --preferences "Generate only premium brand products with prices above €200"
+  ai-generate-mock products.json --images --count 20    # Force AI image generation
+  ai-generate-mock products.json --no-images            # Disable AI images, keep Picsum
   ai-generate-mock input.json --analyze
 
 Environment Variables:
@@ -152,13 +166,22 @@ async function main(): Promise<void> {
   }
   console.log(`Output: ${outputFile}\\n`);
   
-  const generator = new MockGeneratorService();
+  // Determina se abilitare il post-processing delle immagini
+  let enableImageProcessing = true; // Default: abilitato
+  if (args.disableImageProcessing) {
+    enableImageProcessing = false;
+  } else if (args.enableImageProcessing) {
+    enableImageProcessing = true;
+  }
+
+  const generator = new MockGeneratorService(undefined, enableImageProcessing);
   const result = await generator.generateMockData({
     inputFile: args.inputFile,
     outputFile,
     count,
     arrayPath: args.arrayPath,
-    preferences: args.preferences
+    preferences: args.preferences,
+    enableImageProcessing
   });
   
   if (result.success) {
