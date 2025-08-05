@@ -37,14 +37,20 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "dependencies": {
-    "@bramato/openrouter-mock-generator": "file:bramato-openrouter-mock-generator-1.0.0.tgz"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.10.0",
     "typescript": "^5.3.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bramato/openrouter-mock-generator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bramato/openrouter-mock-generator/issues"
+  },
+  "homepage": "https://github.com/bramato/openrouter-mock-generator#readme",
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }
